@@ -31,6 +31,14 @@ process_execute (const char *file_name)
   char *fn_copy;
   tid_t tid;
 
+  /* Parse the first word (command) out of the given file_name string*/
+  char command[256];
+  strlcpy(command, file_name, strlen(file_name)+1);
+  int i;
+  for(i=0;command[i]!=' ' && command[i]!='\0' && command[i]!='\t';i++){}
+  command[i]='\0';
+
+
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
@@ -60,6 +68,8 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+  //stack_arguments(argv, token_num, &if_.esp);
+  hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -88,6 +98,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  while(1){}
   return -1;
 }
 
@@ -215,6 +226,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
   bool success = false;
   int i;
 
+  /* Parse the first word (command) out of the given file_name string*/
+  char command[256];
+  strlcpy(command, file_name, strlen(file_name) + 1);
+  for (i = 0; command[i] != ' ' && command[i] != '\0' && command[i] != '\t'; i++) {}
+  command[i] = '\0';
+
+
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
@@ -222,10 +240,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (command);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
+      printf ("load: %s: open failed\n", command);
       goto done; 
     }
 
@@ -238,7 +256,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024) 
     {
-      printf ("load: %s: error loading executable\n", file_name);
+      printf ("load: %s: error loading executable\n", command);
       goto done; 
     }
 
@@ -302,8 +320,18 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
+  /* This is load() function */
   if (!setup_stack (esp))
     goto done;
+
+  char **argv = NULL;
+  //load (const char *file_name, void (**eip) (void), void **esp) 
+    /*be aware that parse_arguments() allocates memory - make sure to
+    deallocate to prevent memory leak!*/
+  parse_arguments(argv, file_name, esp);
+
+
+
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
@@ -462,4 +490,62 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+void
+parse_arguments(char ** argv, const char * filename, void **esp) {
+
+  argv = (char ** ) malloc(sizeof(char * ) * 128);
+  char fname[128];
+  strlcpy(fname, filename, strlen(filename) + 1);
+  char * token;
+  char * next_ptr;
+  int i;
+  int token_num;
+  token = strtok_r(fname, " ", &next_ptr);
+  for (i = 0; token; i++) {
+    argv[i] = (char * ) malloc(sizeof(char) * 128);
+    strlcpy(argv[i], token, strlen(token) + 1);
+    token = strtok_r(NULL, " ", &next_ptr);
+  }
+  token_num = i;
+  int word_align = 0;
+  for(i = token_num - 1; i > -1; i--){
+    *esp-=strlen(argv[i]) + 1;
+    word_align += strlen(argv[i]) + 1;
+    memcpy(*esp, argv[i], strlen(argv[i]) + 1);
+    argv[i] = *esp;
+  }
+  /* word alignment */
+  word_align = word_align % 4 ? 4 - word_align % 4 : 0;
+  *esp -= word_align;
+  memset(*esp, 0, word_align);
+
+
+  /* null sentinel - 4 bytes*/
+  *esp -= 4;
+  memset(*esp, 0, sizeof(int));
+
+  /* write addresses pointing to each of arguments */
+  int row_addr = 0;
+  for(i = token_num -1 ; i >= 0; i--){
+    *esp -= sizeof(char*);
+    row_addr += strlen(argv[i]) + 1;
+    memcpy(*esp, &argv[i] , sizeof(char*));
+  }
+
+  /* write address of argv[0] */
+  char *argv_origin = *esp;
+  *esp-=sizeof(char**);
+  memcpy(*esp, &argv_origin, sizeof(char**));
+
+  /* write number of arguments */
+  *esp -= sizeof(int);
+  memcpy(*esp, &token_num, sizeof(int));
+
+
+  /* write NULL pointer as return address */
+  *esp -= sizeof(int);
+  memset(*esp, 0, sizeof(int));
+  
 }
