@@ -506,8 +506,8 @@ parse_arguments(const char * filename, void **esp) {
   }
   */
   token = strtok_r((char*)filename, " ", &next_ptr);
-  while(token){
-    
+  while(token)
+  {
     printf("token = [%s]\n", token);
     argv[i] = token;
     //strlcpy(argv[i], token, strlen(token)+1); 
@@ -525,7 +525,8 @@ parse_arguments(const char * filename, void **esp) {
   token_num = i;
 
   int word_align = 0;
-  for(i = token_num - 1; i > -1; i--){
+  for(i = token_num - 1; i > -1; i--)
+  {
     *esp-=strlen(argv[i]) + 1;
     word_align += strlen(argv[i]) + 1;
     memcpy(*esp, argv[i], strlen(argv[i]) + 1);
@@ -544,7 +545,8 @@ parse_arguments(const char * filename, void **esp) {
   memset(*esp, 0, sizeof(int));
 
   /* write addresses pointing to each of arguments */
-  for(i = token_num -1 ; i >= 0; i--){
+  for(i = token_num -1 ; i >= 0; i--)
+  {
     *esp -= sizeof(char*);
     memcpy(*esp, &argv[i] , sizeof(char*));
   }
