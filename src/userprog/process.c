@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "threads/malloc.h"
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -68,7 +69,6 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
-  //stack_arguments(argv, token_num, &if_.esp);
   hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
 
   /* If load failed, quit. */
@@ -324,14 +324,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (!setup_stack (esp))
     goto done;
 
-  char **argv = NULL;
   //load (const char *file_name, void (**eip) (void), void **esp) 
     /*be aware that parse_arguments() allocates memory - make sure to
     deallocate to prevent memory leak!*/
-  parse_arguments(argv, file_name, esp);
-
-
-
+  parse_arguments(file_name, esp);
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
@@ -493,22 +489,41 @@ install_page (void *upage, void *kpage, bool writable)
 }
 
 void
-parse_arguments(char ** argv, const char * filename, void **esp) {
-
-  argv = (char ** ) malloc(sizeof(char * ) * 128);
-  char fname[128];
-  strlcpy(fname, filename, strlen(filename) + 1);
+parse_arguments(const char * filename, void **esp) {
+  char **argv;
   char * token;
   char * next_ptr;
-  int i;
+  int i = 0;
   int token_num;
-  token = strtok_r(fname, " ", &next_ptr);
-  for (i = 0; token; i++) {
-    argv[i] = (char * ) malloc(sizeof(char) * 128);
+  
+  argv = (char ** ) malloc(sizeof(char * ) * 128);
+/*
+  for (token = (char*)filename; token != NULL; token = strtok_r(NULL, " ", &next_ptr)){
+    
     strlcpy(argv[i], token, strlen(token) + 1);
-    token = strtok_r(NULL, " ", &next_ptr);
+    printf("token:%s argv[%d]: %s\n",token, i, argv[i]);
+    i++;
   }
+  */
+  token = strtok_r((char*)filename, " ", &next_ptr);
+  while(token){
+    
+    printf("token = [%s]\n", token);
+    argv[i] = token;
+    //strlcpy(argv[i], token, strlen(token)+1); 
+    //printf("token:[%s] tokenlen:[%d] argv[%d]: %s\n", token, strlen(token), i, argv[i]);
+    token = strtok_r(NULL, " ", &next_ptr);
+    i++;
+  }
+/*
+  for (i = 0; token != NULL; i++, token = strtok_r(NULL, " ", &next_ptr)) {
+    printf("token:[%s] tokenlen: [%d] ", token, strlen(token));
+    strlcpy(argv[i], token, strlen(token) + 1);
+    printf("argv[%d]: %s\n", i, argv[i]);
+  }
+*/
   token_num = i;
+
   int word_align = 0;
   for(i = token_num - 1; i > -1; i--){
     *esp-=strlen(argv[i]) + 1;
@@ -516,6 +531,8 @@ parse_arguments(char ** argv, const char * filename, void **esp) {
     memcpy(*esp, argv[i], strlen(argv[i]) + 1);
     argv[i] = *esp;
   }
+  argv[token_num] = 0;
+
   /* word alignment */
   word_align = word_align % 4 ? 4 - word_align % 4 : 0;
   *esp -= word_align;
@@ -527,10 +544,8 @@ parse_arguments(char ** argv, const char * filename, void **esp) {
   memset(*esp, 0, sizeof(int));
 
   /* write addresses pointing to each of arguments */
-  int row_addr = 0;
   for(i = token_num -1 ; i >= 0; i--){
     *esp -= sizeof(char*);
-    row_addr += strlen(argv[i]) + 1;
     memcpy(*esp, &argv[i] , sizeof(char*));
   }
 
@@ -545,7 +560,10 @@ parse_arguments(char ** argv, const char * filename, void **esp) {
 
 
   /* write NULL pointer as return address */
-  *esp -= sizeof(int);
-  memset(*esp, 0, sizeof(int));
+  *esp -= sizeof(void*);
+  memset(*esp, 0, sizeof(void*));
+  
+  
+  free(argv);
   
 }
