@@ -48,7 +48,7 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (command, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -69,7 +69,7 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
-  hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
+  //hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -98,7 +98,8 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  while(1){}
+  //while(1){}
+  for(int i=0,a=0;i<1000000000;i++) a++;
   return -1;
 }
 
@@ -324,11 +325,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (!setup_stack (esp))
     goto done;
 
-  //load (const char *file_name, void (**eip) (void), void **esp) 
-    /*be aware that parse_arguments() allocates memory - make sure to
-    deallocate to prevent memory leak!*/
   parse_arguments(file_name, esp);
-
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
@@ -495,37 +492,21 @@ parse_arguments(const char * filename, void **esp) {
   char * next_ptr;
   int i = 0;
   int token_num;
-  
+
   argv = (char ** ) malloc(sizeof(char * ) * 128);
-/*
-  for (token = (char*)filename; token != NULL; token = strtok_r(NULL, " ", &next_ptr)){
-    
-    strlcpy(argv[i], token, strlen(token) + 1);
-    printf("token:%s argv[%d]: %s\n",token, i, argv[i]);
-    i++;
-  }
-  */
+
+  
   token = strtok_r((char*)filename, " ", &next_ptr);
   while(token)
   {
-    printf("token = [%s]\n", token);
     argv[i] = token;
-    //strlcpy(argv[i], token, strlen(token)+1); 
-    //printf("token:[%s] tokenlen:[%d] argv[%d]: %s\n", token, strlen(token), i, argv[i]);
     token = strtok_r(NULL, " ", &next_ptr);
     i++;
   }
-/*
-  for (i = 0; token != NULL; i++, token = strtok_r(NULL, " ", &next_ptr)) {
-    printf("token:[%s] tokenlen: [%d] ", token, strlen(token));
-    strlcpy(argv[i], token, strlen(token) + 1);
-    printf("argv[%d]: %s\n", i, argv[i]);
-  }
-*/
   token_num = i;
 
   int word_align = 0;
-  for(i = token_num - 1; i > -1; i--)
+  for(i = token_num - 1; i >= 0; i--)
   {
     *esp-=strlen(argv[i]) + 1;
     word_align += strlen(argv[i]) + 1;
@@ -538,7 +519,6 @@ parse_arguments(const char * filename, void **esp) {
   word_align = word_align % 4 ? 4 - word_align % 4 : 0;
   *esp -= word_align;
   memset(*esp, 0, word_align);
-
 
   /* null sentinel - 4 bytes*/
   *esp -= 4;
@@ -565,7 +545,7 @@ parse_arguments(const char * filename, void **esp) {
   *esp -= sizeof(void*);
   memset(*esp, 0, sizeof(void*));
   
-  
   free(argv);
   
+
 }

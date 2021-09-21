@@ -18,7 +18,6 @@ static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
   int sys_code = *(int*)f->esp;
-
   //first check if it is valid pointer
   //check sys_code -> get number of parameters
 
@@ -30,55 +29,54 @@ syscall_handler (struct intr_frame *f UNUSED)
   int read(int fd, void*buffer, unsigned size)
   int write(int fd, const void*buffer, unsigned size)
   */
-
   switch(sys_code){
     case SYS_HALT:
     {
+      halt();
       break;
     }
     case SYS_EXIT:
     {
-
-      check_valid(f->esp + 1);
+      check_valid((int*)f->esp + 1);
+      int status = *((int*)f->esp +1);
+      exit(status);
       break;
     }
     case SYS_EXEC:
     {
-      check_valid(f->esp + 1);
+      check_valid((int*)f->esp + 1);
       break;
     }
     case SYS_WAIT:
     {
-      check_valid(f->esp + 1);
+      check_valid((int*)f->esp + 1);
       break;
     }
     case SYS_READ:
     {
-      check_valid(f->esp + 1);
-      check_valid(f->esp + 2);
-      check_valid(f->esp + 3);
-
-      printf("HI IM READ\n");
+      check_valid((int*)f->esp + 1);
+      check_valid((int*)f->esp + 2);
+      check_valid((int*)f->esp + 3);
       break;
     }
     case SYS_WRITE:
     {
-
-      check_valid(f->esp + 1);
-      check_valid(f->esp + 2);
-      check_valid(f->esp + 3);
-
-      printf("HI IM WRITE\n");
+      check_valid((int*)f->esp + 1);
+      check_valid((int*)f->esp + 2);
+      check_valid((int*)f->esp + 3);
+      
+      int fd = *((int*)f->esp + 1);
+      void* buffer = (void*)(*((int*)f->esp + 2));
+      
+      unsigned size = *((unsigned*)f->esp + 3);
+      //printf("fd:%d buffer:%s bufptr:%p size:%d\n", fd, (char*)buffer, buffer, size);
+      f->eax = write(fd, buffer, size);
       break;
     }
+    default:
+      break;
 
   }
-
-  void *arg = (void*)(*((int*)f->esp+2));
-  printf("arg:%s\n", (char*)arg);
-  printf("sys_code:%d\n", sys_code);
-  printf ("system call!\n");
-  thread_exit ();
 }
 
 void 
@@ -90,14 +88,28 @@ check_valid (void* addr)
   }
 }
 
-void halt(void)
+void 
+halt(void)
 {
   shutdown_power_off();
 }
 
-void exit (int status)
+void 
+exit (int status)
 {
   struct thread *cur = thread_current();
-  printf("%s: exit(%d)\n", cur->name ,status);
+  cur->status = status;
+  printf("%s: exit(%d)\n", thread_name() ,status);
   thread_exit();
+}
+
+int
+write (int fd, const void *buffer, unsigned size)
+{
+  if(fd==1)
+  {
+    putbuf(buffer, size);
+    return size;
+  }
+  return -1;
 }
