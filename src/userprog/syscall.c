@@ -4,7 +4,9 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/process.h"
 #include <devices/shutdown.h>
+
 
 static void syscall_handler (struct intr_frame *);
 
@@ -17,6 +19,7 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
+  check_valid((void*)f->esp);
   int sys_code = *(int*)f->esp;
   //first check if it is valid pointer
   //check sys_code -> get number of parameters
@@ -45,6 +48,8 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_EXEC:
     {
       check_valid((int*)f->esp + 1);
+      char *cmd_line = (char*)(*((int*)f->esp + 1));
+      pid_t p = exec(cmd_line);
       break;
     }
     case SYS_WAIT:
@@ -69,7 +74,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       void* buffer = (void*)(*((int*)f->esp + 2));
       
       unsigned size = *((unsigned*)f->esp + 3);
-      //printf("fd:%d buffer:%s bufptr:%p size:%d\n", fd, (char*)buffer, buffer, size);
       f->eax = write(fd, buffer, size);
       break;
     }
@@ -82,7 +86,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 void 
 check_valid (void* addr) 
 {
-  if(!is_user_vaddr(addr))
+  if(!is_user_vaddr(addr) || addr == NULL || addr < (void*)0x08048000)
   {
     exit(-1);
   }
@@ -97,8 +101,6 @@ halt(void)
 void 
 exit (int status)
 {
-  struct thread *cur = thread_current();
-  cur->status = status;
   printf("%s: exit(%d)\n", thread_name() ,status);
   thread_exit();
 }
@@ -113,3 +115,23 @@ write (int fd, const void *buffer, unsigned size)
   }
   return -1;
 }
+
+int
+read(int fd, void* buffer, unsigned size)
+{
+  int i = -1;
+  if(fd==0){
+    for(i = 0; i < (int)size; i++)
+    {
+      *(char*)(buffer+i)=input_getc();
+    }
+  }
+  return i;
+}
+
+pid_t 
+exec(const char* cmd_line)
+{
+  return process_execute(cmd_line);
+}
+
