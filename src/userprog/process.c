@@ -30,7 +30,6 @@ tid_t
 process_execute (const char *file_name) 
 {
   
-  struct thread_data td; //contains *fn and semaphore
   char *fn_copy;
   tid_t tid;
 
@@ -49,19 +48,11 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  /* initiate semaphore */
-  sema_init(&(td.thread_sema), 0);
-  /* re-copy fn_copy to struct */
-  strlcpy(td.fn_copy, fn_copy, PGSIZE);
-
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (command, PRI_DEFAULT, start_process, &td);
-  //tid = thread_create (command, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (command, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
 
-  /* call sema_down */
-  sema_down(&(td.thread_sema));
 
   return tid;
 }
@@ -71,13 +62,9 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-  struct thread_data td = *(struct thread_data *) file_name_;
-
+ 
   char *file_name = file_name_;
 
-  file_name = td.fn_copy;
-
-  printf("\n\n\nTEST: %s\n\n\n", file_name);
 
   struct intr_frame if_;
   bool success;
@@ -88,19 +75,13 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
-  printf("SAFE***********************\n");
   success = load (file_name, &if_.eip, &if_.esp);
-  printf("FINISHED LOAD1\n");
-  //hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
 
-  sema_up(&(td.thread_sema));
-    printf("FINISHED LOAD2\n");
+
   /* If load failed, quit. */
   palloc_free_page (file_name);
-    printf("FINISHED LOAD3\n");
   if (!success) 
     thread_exit ();
-    printf("FINISHED LOAD4\n");
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
