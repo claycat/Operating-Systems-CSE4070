@@ -62,6 +62,11 @@ syscall_handler (struct intr_frame *f UNUSED)
       check_valid((int*)f->esp + 1);
       check_valid((int*)f->esp + 2);
       check_valid((int*)f->esp + 3);
+
+      int fd = *((int*)f->esp + 1);
+      void* buffer = (void*)(*((int*)f->esp + 2));
+      unsigned size = *((unsigned*)f->esp + 3);
+      f->eax = read(fd, buffer, size);
       break;
     }
     case SYS_WRITE:
@@ -72,7 +77,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       
       int fd = *((int*)f->esp + 1);
       void* buffer = (void*)(*((int*)f->esp + 2));
-      
       unsigned size = *((unsigned*)f->esp + 3);
       f->eax = write(fd, buffer, size);
       break;
