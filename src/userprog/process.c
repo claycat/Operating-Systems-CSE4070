@@ -29,7 +29,6 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  
   char *fn_copy;
   tid_t tid;
 
@@ -52,6 +51,7 @@ process_execute (const char *file_name)
   tid = thread_create (command, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+  
 
 
   return tid;
@@ -64,8 +64,6 @@ start_process (void *file_name_)
 {
  
   char *file_name = file_name_;
-
-
   struct intr_frame if_;
   bool success;
 
@@ -77,11 +75,20 @@ start_process (void *file_name_)
 
   success = load (file_name, &if_.eip, &if_.esp);
 
+  /* finished load */
+  sema_up(&(thread_current())->sema_load);
+
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
+  {
+    thread_current()->load_status =false;
     thread_exit ();
+  }
+
+  thread_current()->load_status =true;
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -104,9 +111,24 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  //while(1){}
-  for(int i=0,a=0;i<1000000000;i++) a++;
-  return -1;
+  int child_exit_status;
+  /* search for child process pid */
+  struct thread *child_process = get_child_pid(child_tid);
+
+  /* invalid process return NULL */
+  if(child_process==NULL) {
+    return -1;
+  } 
+
+  /* wait until child process ends */
+  sema_down(&(child_process->sema_exit));
+
+
+  child_exit_status = child_process->exit_code;
+  /* remove child process from list */
+  remove_child_process(child_process);
+
+  return child_exit_status;
 }
 
 /* Free the current process's resources. */
@@ -551,7 +573,35 @@ parse_arguments(const char * filename, void **esp) {
   *esp -= sizeof(void*);
   memset(*esp, 0, sizeof(void*));
   
-  free(argv);
   
+  free(argv);
 
 }
+
+struct thread *
+get_child_pid (int pid)
+{
+  struct list_elem *iter;
+  struct thread *f = NULL;
+  for(iter = list_begin(&(thread_current())->child); iter!=list_end(&(thread_current()->child)); iter = list_next(iter))
+  {
+    f = list_entry(iter, struct thread, child_elem);
+    if(f->tid == pid)
+    {
+      return f;
+    }
+  }
+  return NULL;
+}
+
+void 
+remove_child_process (struct thread *child_proc)
+{
+  if(child_proc == NULL) return; 
+  else
+  {
+    list_remove(&(child_proc->child_elem));
+    palloc_free_page(child_proc);
+  }
+}
+

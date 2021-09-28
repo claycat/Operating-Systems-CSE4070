@@ -21,17 +21,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 {
   check_valid((void*)f->esp);
   int sys_code = *(int*)f->esp;
-  //first check if it is valid pointer
-  //check sys_code -> get number of parameters
 
-  /*
-  void halt(void)
-  void exit(int status)
-  pid_t exec(const char *cmd_line)
-  int wait(pid_t pid)
-  int read(int fd, void*buffer, unsigned size)
-  int write(int fd, const void*buffer, unsigned size)
-  */
   switch(sys_code){
     case SYS_HALT:
     {
@@ -47,14 +37,34 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_EXEC:
     {
+
+      /* case like 0x20101234 */
+      
       check_valid((int*)f->esp + 1);
+      
       char *cmd_line = (char*)(*((int*)f->esp + 1));
-      pid_t p = exec(cmd_line);
+
+      
+
+      if(cmd_line == NULL 
+        || !is_user_vaddr(cmd_line)
+        || pagedir_get_page(thread_current()->pagedir, cmd_line) == NULL
+        || !is_user_vaddr(f->esp + 1)
+      )
+      {
+        f->eax = -1;
+        exit(-1);
+        break;
+      }
+
+      f->eax = exec(cmd_line);
       break;
     }
     case SYS_WAIT:
     {
       check_valid((int*)f->esp + 1);
+      pid_t child_tid = *((int*)f->esp+1);
+      f->eax = wait(child_tid);
       break;
     }
     case SYS_READ:
@@ -81,19 +91,53 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = write(fd, buffer, size);
       break;
     }
+
+    case SYS_FIBO:
+    {
+      check_valid((int*)f->esp + 1);
+      int a = *((int*)f->esp + 1);
+      f->eax = fibonacci(a);
+      break;
+    }
+
+    case SYS_MAX:
+    {
+      
+      check_valid((int*)f->esp + 1);
+      check_valid((int*)f->esp + 2);
+      check_valid((int*)f->esp + 3);
+      check_valid((int*)f->esp + 4);
+
+      int a = *((int*)f->esp + 1);
+      int b = *((int*)f->esp + 2);
+      int c = *((int*)f->esp + 3);
+      int d = *((int*)f->esp + 4);
+      f->eax = max_of_four_int(a, b, c, d);
+      break;
+    }
+
     default:
       break;
-
   }
 }
 
 void 
 check_valid (void* addr) 
 {
-  if(!is_user_vaddr(addr) || addr == NULL || addr < (void*)0x08048000)
+
+  if(addr == NULL)
   {
     exit(-1);
   }
+  if(!(0x08048000 < addr && addr < PHYS_BASE))
+  {
+    exit(-1);
+  }
+  if(pagedir_get_page(thread_current()->pagedir, addr) == NULL)
+  {
+    exit(-1);
+  }
+  
 }
 
 void 
@@ -105,7 +149,10 @@ halt(void)
 void 
 exit (int status)
 {
+  struct thread *cur = thread_current();
+  cur->exit_code = status;
   printf("%s: exit(%d)\n", thread_name() ,status);
+
   thread_exit();
 }
 
@@ -136,6 +183,55 @@ read(int fd, void* buffer, unsigned size)
 pid_t 
 exec(const char* cmd_line)
 {
-  return process_execute(cmd_line);
+  /* create child process */
+  tid_t id = process_execute(cmd_line);
+  
+  /* find child process */
+  struct thread *child_process = get_child_pid(id);
+  /* sema_down - if value is negative wait */
+  sema_down(&(child_process->sema_load));
+  
+  /* waits until start_process finishes loading */
+  if(child_process->load_status)
+  {
+    return id;
+  }
+  else
+  {
+    return -1;
+  } 
+ 
 }
 
+int 
+wait (pid_t tid)
+{
+  return process_wait(tid);
+}
+
+int 
+fibonacci(int a)
+{
+  if(a == 1 || a == 2) return 1;
+
+  int prev = 1, mid= 1, next = 0;
+
+  for(int i = 3; i <= a; i++)
+  {
+    next = prev + mid;
+    prev = mid;
+    mid = next;
+  }
+  return next;
+}
+
+int 
+max_of_four_int(int a, int b, int c, int d)
+{
+  int ret = a;
+  if(ret < b) ret = b;
+  if(ret < c) ret = c;
+  if(ret < d) ret = d;
+
+  return ret;
+}
