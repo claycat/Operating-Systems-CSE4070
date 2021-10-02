@@ -31,6 +31,8 @@ int filesize (int fd);
 int read (int fd, void *buffer, unsigned length);
 int write (int fd, const void *buffer, unsigned length);
 void seek (int fd, unsigned position);
+int fibonacci(int a);
+int max_of_four_int(int a, int b, int c, int d);
 unsigned tell (int fd);
 void close (int fd);
 

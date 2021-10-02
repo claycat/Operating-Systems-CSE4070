@@ -93,6 +93,7 @@ thread_init (void)
   list_init (&ready_list);
   list_init (&all_list);
 
+
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
@@ -198,6 +199,20 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  /* save parent thread*/
+  t->parent_thread = thread_current();
+
+  /* program not loaded yet */
+  sema_init(&(t->sema_load), 0);
+  t->load_status = false;
+
+  /* process is not done yet */
+  sema_init(&(t->sema_exit), 0);
+  t->exit_status = false;
+
+  /* push to child list */
+  list_push_back(&(thread_current()->child), &(t->child_elem));
+
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -280,6 +295,7 @@ thread_tid (void)
 void
 thread_exit (void) 
 {
+  struct thread *t = thread_current();
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
@@ -291,7 +307,13 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
+  /* alert process has ended */
+  t->exit_status = true;
+  sema_up(&(t->sema_exit));
+
   thread_current ()->status = THREAD_DYING;
+
+  
   schedule ();
   NOT_REACHED ();
 }
@@ -467,6 +489,8 @@ init_thread (struct thread *t, const char *name, int priority)
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
+
+  list_init(&(t->child));
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -538,7 +562,6 @@ thread_schedule_tail (struct thread *prev)
   if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) 
     {
       ASSERT (prev != cur);
-      palloc_free_page (prev);
     }
 }
 
