@@ -14,6 +14,7 @@ void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+  lock_init(&filesys_lock);
 }
 
 static void
@@ -28,6 +29,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       halt();
       break;
     }
+
     case SYS_EXIT:
     {
       check_valid((int*)f->esp + 1);
@@ -35,17 +37,12 @@ syscall_handler (struct intr_frame *f UNUSED)
       exit(status);
       break;
     }
+
     case SYS_EXEC:
     {
-
       /* case like 0x20101234 */
-      
       check_valid((int*)f->esp + 1);
-      
       char *cmd_line = (char*)(*((int*)f->esp + 1));
-
-      
-
       if(cmd_line == NULL 
         || !is_user_vaddr(cmd_line)
         || pagedir_get_page(thread_current()->pagedir, cmd_line) == NULL
@@ -60,6 +57,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = exec(cmd_line);
       break;
     }
+
     case SYS_WAIT:
     {
       check_valid((int*)f->esp + 1);
@@ -67,6 +65,77 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = wait(child_tid);
       break;
     }
+
+    case SYS_CREATE:
+    {
+      check_valid((int*)f->esp + 1);
+      check_valid((int*)f->esp + 2);
+      char *file_name = (char*)(*((int*)f->esp + 1));
+      unsigned initial_size = (unsigned)(*((int*)f->esp + 2));
+
+      if(file_name == NULL
+        || !is_user_vaddr(file_name)
+        || pagedir_get_page(thread_current()->pagedir, file_name) == NULL
+        || !is_user_vaddr(f->esp + 1)
+      )
+      {
+        f->eax = -1; 
+        exit(-1);
+        break;
+      }
+
+      f->eax = create(file_name, initial_size);
+      break;
+    }
+
+    case SYS_REMOVE:
+    {
+      check_valid((int*)f->esp + 1);
+      char *file_name = (char*)(*((int*)f->esp + 1));
+
+      if(file_name == NULL
+        || !is_user_vaddr(file_name)
+        || pagedir_get_page(thread_current()->pagedir, file_name) == NULL
+        || !is_user_vaddr(f->esp + 1)
+      )
+      {
+        f->eax = -1; 
+        exit(-1);
+        break;
+      }
+
+      f->eax = remove(file_name);
+      break;
+    }
+
+    case SYS_OPEN:
+    {
+      check_valid((int*)f->esp + 1);
+      char *file_name = (char*)(*((int*)f->esp + 1));
+
+      if(file_name == NULL
+        || !is_user_vaddr(file_name)
+        || pagedir_get_page(thread_current()->pagedir, file_name) == NULL
+        || !is_user_vaddr(f->esp + 1)
+      )
+      {
+        f->eax = -1; 
+        exit(-1);
+        break;
+      }
+
+      f->eax = open(file_name);
+      break;
+    }
+
+    case SYS_FILESIZE: 
+    {
+      check_valid((int*)f->esp + 1);
+      int fd = (int)(*((int*)f->esp + 1));
+      f->eax = filesize(fd);
+      break;
+    }
+
     case SYS_READ:
     {
       check_valid((int*)f->esp + 1);
@@ -91,6 +160,31 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = write(fd, buffer, size);
       break;
     }
+
+    case SYS_SEEK:
+    {
+      check_valid((int*)f->esp + 1);
+      check_valid((int*)f->esp + 2);
+      int fd = (int)(*((int*)f->esp + 1));
+      unsigned position = (unsigned)(*((int*)f->esp + 2));
+      seek(fd, position);
+      break;
+    }
+    case SYS_TELL:
+    {
+      check_valid((int*)f->esp + 1);
+      int fd = (int)(*((int*)f->esp + 1));
+      f->eax = tell(fd);
+      break;
+    }
+    case SYS_CLOSE:
+    {
+      check_valid((int*)f->esp + 1);
+      int fd = (int)(*((int*)f->esp + 1));
+      close(fd);
+      break;
+    }
+
 
     case SYS_FIBO:
     {
@@ -234,4 +328,56 @@ max_of_four_int(int a, int b, int c, int d)
   if(ret < d) ret = d;
 
   return ret;
+}
+
+bool
+create (const char *file, unsigned initial_size)
+{
+  
+  return true;
+}
+
+bool
+remove (const char *file)
+{
+  return true;
+}
+
+int
+open (const char *file)
+{
+  /* open file */
+  struct file *open_file = filesys_open(file);
+
+  /* if file does not exist return -1 */
+  if(open_file == NULL) return -1;
+
+  /* add file to file descriptors */
+  int file_fd = add_file_to_fd(open_file);
+  
+  return file_fd;
+}
+
+int
+filesize(int fd)
+{
+  return 0;
+}
+
+void
+seek (int fd, unsigned position)
+{
+
+}
+
+unsigned 
+tell (int fd)
+{
+  return 0;
+}
+
+void
+close (int fd)
+{
+
 }

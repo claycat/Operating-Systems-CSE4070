@@ -605,3 +605,49 @@ remove_child_process (struct thread *child_proc)
   }
 }
 
+int 
+add_file_to_fd(struct file *f)
+{
+  struct thread *cur = thread_current();
+  if(f!=NULL)
+  {
+    cur->fd[cur->next_fd++] = f;
+    return cur->next_fd;
+  }
+  else return -1;
+}
+
+struct file
+*get_file_by_fd(int fd)
+{
+  struct thread *cur = thread_current();
+  if(fd >= cur->next_fd)
+  {
+    return NULL;
+  }
+  else
+  {
+    return cur->fd[fd];
+  }
+}
+
+void
+close_file_fd(int fd)
+{
+  struct thread *cur = thread_current();
+  if(fd < cur->next_fd)
+  {
+    file_close(get_file_by_fd(fd));
+    cur->fd[fd] = NULL;
+  }
+}
+
+void
+close_all_fd(void)
+{
+  struct thread *cur = thread_current();
+  for(int i = 2; i < cur->next_fd; i++)
+  {
+    close_file_fd(i);
+  }
+}
