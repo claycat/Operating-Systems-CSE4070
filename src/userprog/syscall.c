@@ -354,14 +354,18 @@ open (const char *file)
 
   /* add file to file descriptors */
   int file_fd = add_file_to_fd(open_file);
-  
+
   return file_fd;
 }
 
 int
 filesize(int fd)
 {
-  return 0;
+  struct file *myfile = get_file_by_fd(fd);
+  if(myfile == NULL) return -1;
+
+  return (int)file_length(myfile);
+
 }
 
 void
