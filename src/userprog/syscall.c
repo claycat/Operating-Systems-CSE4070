@@ -138,7 +138,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 
     case SYS_READ:
     {
-
+      
       check_valid((int*)f->esp + 1);
       check_valid((void*)(*((int*)f->esp + 2)));
       check_valid((int*)f->esp + 3);
@@ -257,6 +257,9 @@ write (int fd, const void *buffer, unsigned size)
   /* find file using fd */
   struct thread *cur = thread_current();
   struct file *myfile = get_file_by_fd(fd);
+  
+  check_valid(buffer);
+  if(pagedir_get_page(cur->pagedir, buffer) == NULL) return -1;
 
   /* exception handling */
   if(fd >= cur->next_fd|| fd < 0 ) return -1;
@@ -268,7 +271,7 @@ write (int fd, const void *buffer, unsigned size)
   else
   {
     if(myfile == NULL) return -1;
-    
+
     /* use lock to deny other processes */
     lock_acquire(&filesys_lock);
     int ret_write;
@@ -286,6 +289,9 @@ read(int fd, void* buffer, unsigned size)
   struct thread *cur = thread_current();
   struct file *myfile = get_file_by_fd(fd);
 
+  check_valid(buffer);
+  if(pagedir_get_page(cur->pagedir, buffer) == NULL) return -1;
+
   /* exception handling */
   
   if(fd >= cur->next_fd || fd < 0 ) return -1;
@@ -296,8 +302,9 @@ read(int fd, void* buffer, unsigned size)
   /* if fd = 0 use getc */
   if(fd == 0)
   {
-    for(i; i < (int)size; i++)
+    for(i = 0; i < (int)size; i++)
     {
+      if(*(char*)(buffer+i) == '\0') break;
       *(char*)(buffer+i) = input_getc();
     }
     return i;
@@ -326,15 +333,9 @@ exec(const char* cmd_line)
   sema_down(&(child_process->sema_load));
   
   /* waits until start_process finishes loading */
-  if(child_process->load_status)
-  {
-    return id;
-  }
-  else
-  {
-    return -1;
-  } 
- 
+  if(child_process->load_status) return id;
+
+  else return -1;
 }
 
 int 
@@ -373,13 +374,17 @@ max_of_four_int(int a, int b, int c, int d)
 bool
 create (const char *file, unsigned initial_size)
 {
+  if(file == NULL) exit(-1);
+  check_valid(file);
   return filesys_create(file, initial_size);
 }
 
 bool
 remove (const char *file)
 {
-  return true;
+  if(file == NULL) exit(-1);
+  check_valid(file);
+  return filesys_remove(file);
 }
 
 int
@@ -410,17 +415,24 @@ filesize(int fd)
 void
 seek (int fd, unsigned position)
 {
+  struct file *myfile = get_file_by_fd(fd);
+  if(myfile == NULL) exit(-1);
 
+  file_seek(myfile, position);
 }
 
 unsigned 
 tell (int fd)
 {
+  struct file *myfile = get_file_by_fd(fd);
+  if(myfile == NULL) return -1;
+
+  file_tell(myfile);
   return 0;
 }
 
 void
 close (int fd)
 {
-
+  close_file_fd(fd);
 }

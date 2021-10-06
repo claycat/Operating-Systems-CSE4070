@@ -573,6 +573,7 @@ parse_arguments(const char * filename, void **esp) {
   *esp -= sizeof(void*);
   memset(*esp, 0, sizeof(void*));
   
+  //hex_dump(*esp, *esp, PHYS_BASE-*esp, true);
   free(argv);
 
 }
