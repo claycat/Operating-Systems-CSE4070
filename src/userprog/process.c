@@ -573,7 +573,7 @@ parse_arguments(const char * filename, void **esp) {
   *esp -= sizeof(void*);
   memset(*esp, 0, sizeof(void*));
   
-  
+
   free(argv);
 
 }
@@ -612,7 +612,7 @@ add_file_to_fd(struct file *f)
   if(f!=NULL)
   {
     cur->fd[cur->next_fd++] = f;
-    return cur->next_fd;
+    return cur->next_fd - 1;
   }
   else return -1;
 }
@@ -621,7 +621,7 @@ struct file
 *get_file_by_fd(int fd)
 {
   struct thread *cur = thread_current();
-  if(fd >= cur->next_fd)
+  if(fd >= cur->next_fd || fd < 0)
   {
     return NULL;
   }
@@ -635,7 +635,7 @@ void
 close_file_fd(int fd)
 {
   struct thread *cur = thread_current();
-  if(fd < cur->next_fd)
+  if(fd < cur->next_fd && fd >= 0)
   {
     file_close(get_file_by_fd(fd));
     cur->fd[fd] = NULL;

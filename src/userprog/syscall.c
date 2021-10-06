@@ -138,8 +138,9 @@ syscall_handler (struct intr_frame *f UNUSED)
 
     case SYS_READ:
     {
+
       check_valid((int*)f->esp + 1);
-      check_valid((int*)f->esp + 2);
+      check_valid((void*)(*((int*)f->esp + 2)));
       check_valid((int*)f->esp + 3);
 
       int fd = *((int*)f->esp + 1);
@@ -151,7 +152,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_WRITE:
     {
       check_valid((int*)f->esp + 1);
-      check_valid((int*)f->esp + 2);
+      check_valid((void*)(*((int*)f->esp + 2)));
       check_valid((int*)f->esp + 3);
       
       int fd = *((int*)f->esp + 1);
@@ -253,25 +254,71 @@ exit (int status)
 int
 write (int fd, const void *buffer, unsigned size)
 {
-  if(fd==1)
+  /* find file using fd */
+  struct thread *cur = thread_current();
+  struct file *myfile = get_file_by_fd(fd);
+  /* exception handling */
+
+  if(fd >= cur->next_fd
+    || myfile == NULL
+    || fd < 0
+  ) return -1;
+
+  /* use lock to deny other processes */
+  lock_acquire(&filesys_lock);
+
+  if(fd == 1)
   {
     putbuf(buffer, size);
+    lock_release(&filesys_lock);
     return size;
   }
-  return -1;
+  else
+  {
+    int ret_write;
+    ret_write = file_write(myfile, buffer, size);
+    lock_release(&filesys_lock);
+    return ret_write;
+  }
 }
 
 int
 read(int fd, void* buffer, unsigned size)
 {
-  int i = -1;
-  if(fd==0){
-    for(i = 0; i < (int)size; i++)
+  int i = 0;
+  printf("READ\n\n\n");
+  /* find file using fd */
+  struct thread *cur = thread_current();
+  struct file *myfile = get_file_by_fd(fd);
+
+  /* exception handling */
+  
+  if(fd >= cur->next_fd
+    || myfile == NULL
+    || fd < 0
+  ) return -1;
+
+  /* use lock to deny other processes */
+  lock_acquire(&filesys_lock);
+
+  /* if fd = 0 use getc */
+  if(fd == 0)
+  {
+    for(i; i < (int)size; i++)
     {
-      *(char*)(buffer+i)=input_getc();
+      *(char*)(buffer+i) = input_getc();
     }
+    lock_release(&filesys_lock);
+    return i;
   }
-  return i;
+  /* else save data of size "size" and return saved length of bytes */
+  else
+  {
+    int ret_read = file_read(myfile, buffer, size);
+    lock_release(&filesys_lock);
+    return ret_read;
+  }
+
 }
 
 pid_t 
@@ -333,8 +380,7 @@ max_of_four_int(int a, int b, int c, int d)
 bool
 create (const char *file, unsigned initial_size)
 {
-  
-  return true;
+  return filesys_create(file, initial_size);
 }
 
 bool

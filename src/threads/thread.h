@@ -108,6 +108,10 @@ struct thread
     bool load_status;
     int exit_code;
 
+    /* file descriptors */
+    struct file* fd[128];
+    int next_fd;
+
    
     
 #endif

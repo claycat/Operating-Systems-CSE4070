@@ -216,6 +216,9 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  /*assign file descriptor number */
+  t->next_fd = 2; 
+
   return tid;
 }
 
