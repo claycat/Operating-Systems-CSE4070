@@ -573,7 +573,6 @@ parse_arguments(const char * filename, void **esp) {
   *esp -= sizeof(void*);
   memset(*esp, 0, sizeof(void*));
   
-
   free(argv);
 
 }

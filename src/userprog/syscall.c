@@ -257,24 +257,20 @@ write (int fd, const void *buffer, unsigned size)
   /* find file using fd */
   struct thread *cur = thread_current();
   struct file *myfile = get_file_by_fd(fd);
+
   /* exception handling */
-
-  if(fd >= cur->next_fd
-    || myfile == NULL
-    || fd < 0
-  ) return -1;
-
-  /* use lock to deny other processes */
-  lock_acquire(&filesys_lock);
-
+  if(fd >= cur->next_fd|| fd < 0 ) return -1;
   if(fd == 1)
   {
     putbuf(buffer, size);
-    lock_release(&filesys_lock);
     return size;
   }
   else
   {
+    if(myfile == NULL) return -1;
+    
+    /* use lock to deny other processes */
+    lock_acquire(&filesys_lock);
     int ret_write;
     ret_write = file_write(myfile, buffer, size);
     lock_release(&filesys_lock);
@@ -286,20 +282,16 @@ int
 read(int fd, void* buffer, unsigned size)
 {
   int i = 0;
-  printf("READ\n\n\n");
   /* find file using fd */
   struct thread *cur = thread_current();
   struct file *myfile = get_file_by_fd(fd);
 
   /* exception handling */
   
-  if(fd >= cur->next_fd
-    || myfile == NULL
-    || fd < 0
-  ) return -1;
+  if(fd >= cur->next_fd || fd < 0 ) return -1;
 
   /* use lock to deny other processes */
-  lock_acquire(&filesys_lock);
+  lock_acquire(&filesys_lock); 
 
   /* if fd = 0 use getc */
   if(fd == 0)
@@ -308,12 +300,13 @@ read(int fd, void* buffer, unsigned size)
     {
       *(char*)(buffer+i) = input_getc();
     }
-    lock_release(&filesys_lock);
     return i;
   }
   /* else save data of size "size" and return saved length of bytes */
   else
   {
+    if(myfile == NULL) return -1;
+    
     int ret_read = file_read(myfile, buffer, size);
     lock_release(&filesys_lock);
     return ret_read;
