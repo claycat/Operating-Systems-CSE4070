@@ -390,6 +390,7 @@ remove (const char *file)
 int
 open (const char *file)
 {
+  struct thread *cur = thread_current();
   /* open file */
   struct file *open_file = filesys_open(file);
 
@@ -398,6 +399,12 @@ open (const char *file)
 
   /* add file to file descriptors */
   int file_fd = add_file_to_fd(open_file);
+
+  /* denying writes to current executables */
+  if(!strcmp(file, cur->name))
+  {
+    file_deny_write(open_file);
+  }
 
   return file_fd;
 }
