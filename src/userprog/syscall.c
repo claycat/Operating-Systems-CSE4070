@@ -434,8 +434,8 @@ tell (int fd)
   struct file *myfile = get_file_by_fd(fd);
   if(myfile == NULL) return -1;
 
-  file_tell(myfile);
-  return 0;
+  return file_tell(myfile);
+  
 }
 
 void
