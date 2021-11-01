@@ -90,11 +90,11 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
+    int64_t wakeup_tick;                    /* wakeup tick for alarm system call. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
-#ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     struct semaphore sema_exit;
@@ -112,7 +112,7 @@ struct thread
     struct file* fd[128];
     int next_fd;
 
-   
+#ifdef USERPROG
     
 #endif
 
@@ -156,4 +156,12 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+void thread_sleep(int64_t ticks);
+void thread_awake(int64_t ticks);
+void update_next_tick(int64_t ticks);
+
+int64_t get_next_tick(void);
+
+void schedule_preemptive(void);
+static bool thread_priority_cmp(const struct list_elem *first, const struct list_elem *second, void *aux);
 #endif /* threads/thread.h */

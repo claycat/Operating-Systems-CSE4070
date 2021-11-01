@@ -28,6 +28,13 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+/* List of processes in THREAD_BLOCKED state. Explicitly when 
+  timer_sleep() is called.  */
+static struct list sleep_list;
+
+/* variable to keep track of next thread to awake in sleep_list */
+int64_t next_tick = INT64_MAX;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -92,6 +99,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&sleep_list);
 
 
   /* Set up a thread structure for the running thread. */
@@ -219,6 +227,13 @@ thread_create (const char *name, int priority,
   /*assign file descriptor number */
   t->next_fd = 2; 
 
+  /* if priority of created thread is bigger than priority of current thread, yield CPU*/
+  struct thread *cur = thread_current();
+  if(cur->priority < t->priority)
+  {
+    thread_yield();
+  }
+
   return tid;
 }
 
@@ -255,7 +270,8 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  
+  list_insert_ordered(&ready_list, &t->elem, thread_priority_cmp, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -333,7 +349,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered(&ready_list, &cur->elem, thread_priority_cmp, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -360,7 +376,22 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  //thread_current ()->priority = new_priority;
+  struct thread *cur = thread_current();
+  struct thread *ready_front;
+  /* if priority of the thread changes, use preemption */
+  int old_priority = cur -> priority;
+  cur -> priority = new_priority;
+  if(new_priority < old_priority)
+  {
+    if(!list_empty(&ready_list))
+    {
+      ready_front = list_entry(list_front(&ready_list), struct thread, elem);
+      if(cur->priority < ready_front->priority)
+        thread_yield();
+    } 
+  }
+
 }
 
 /* Returns the current thread's priority. */
@@ -608,3 +639,84 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+
+/* blocks current running thread and pushes to sleep list.
+  Called when timer_sleep is invoked */ 
+void 
+thread_sleep(int64_t ticks)
+{
+  struct thread *cur = thread_current();
+  /* interrupts are disabled for this function */
+  enum intr_level old_level;
+  old_level = intr_disable();
+
+  if(cur != idle_thread)
+  {
+    /* save wakeup_tick for thread */
+    cur->wakeup_tick = ticks;
+    /* push to sleep list */
+    list_push_back(&sleep_list, &cur->elem);
+    /* block current thread */
+    thread_block();
+    /* update next tick to awake */
+    update_next_tick(ticks);
+  }
+  intr_set_level(old_level); //maybe here?
+
+}
+
+/* unblocks the thread with highest priority from the sleep list */
+void 
+thread_awake(int64_t ticks)
+{
+  next_tick = INT64_MAX;
+  struct list_elem *iter;
+  struct thread *f = NULL;
+  for(iter = list_begin(&sleep_list); iter!=list_end(&sleep_list);)
+  {
+    f = list_entry(iter, struct thread, elem);
+    if(f->wakeup_tick <= ticks)
+    {
+      iter = list_remove(&f->elem);
+      thread_unblock(f);
+    }
+    else
+    {
+      update_next_tick(f->wakeup_tick);
+      iter = list_next(iter);
+    }
+    //list_remove() should be done carefully - list.c has some cautions
+  }
+
+}
+
+/* updates next tick */
+void 
+update_next_tick(int64_t ticks)
+{
+  next_tick = next_tick < ticks ? next_tick : ticks;
+}
+
+/* returns the next_tick value of thread */
+int64_t 
+get_next_tick(void)
+{
+  return next_tick;
+}
+
+void 
+schedule_preemptive(void)
+{
+
+}
+
+static bool 
+thread_priority_cmp(const struct list_elem *first, const struct list_elem *second, void *aux)
+{
+  struct thread *f = list_entry(first,  struct thread, elem);
+  struct thread *s = list_entry(second, struct thread, elem);
+
+  return f->priority > s->priority;
+
+}
