@@ -11,6 +11,8 @@
 extern bool thread_prior_aging;
 #endif
 
+
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -168,5 +170,5 @@ void update_next_tick(int64_t ticks);
 int64_t get_next_tick(void);
 
 void schedule_preemptive(void);
-static bool thread_priority_cmp(const struct list_elem *first, const struct list_elem *second, void *aux);
+bool thread_priority_cmp(const struct list_elem *first, const struct list_elem *second, void *aux);
 #endif /* threads/thread.h */

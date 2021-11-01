@@ -152,13 +152,15 @@ thread_tick (void)
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
 
-  #ifndef USERPROG
-  /* Project #3 */
+#ifndef USERPROG
+
+  /* Project #3 
   thread_wake_up();
 
   if(thread_prior_aging == true)
     thread_aging();
-  #endif
+  */
+#endif
 }
 
 /* Prints thread statistics. */
@@ -362,7 +364,12 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_insert_ordered(&ready_list, &cur->elem, thread_priority_cmp, NULL);
+    list_insert_ordered(
+      &ready_list, 
+      &cur->elem, 
+      thread_priority_cmp,
+      NULL
+      );
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -721,10 +728,17 @@ get_next_tick(void)
 void 
 schedule_preemptive(void)
 {
-
+  struct thread *cur = thread_current();
+  struct thread *ready_front;
+  if(!list_empty(&ready_list))
+  {
+    ready_front = list_entry(list_front(&ready_list), struct thread, elem);
+    if(cur->priority < ready_front->priority)
+      thread_yield();
+  } 
 }
 
-static bool 
+bool 
 thread_priority_cmp(const struct list_elem *first, const struct list_elem *second, void *aux)
 {
   struct thread *f = list_entry(first,  struct thread, elem);
