@@ -6,6 +6,9 @@
 #include <stdint.h>
 #include "threads/synch.h"
 
+
+extern bool thread_mlfqs;
+
 #ifndef USERPROG
 /* Project 3 */
 extern bool thread_prior_aging;
@@ -119,6 +122,10 @@ struct thread
     struct file* fd[128];
     int next_fd;
 
+    /* advanced scheduler */
+    int nice;
+    int recent_cpu;
+
 #ifdef USERPROG
     
 #endif
@@ -171,4 +178,11 @@ int64_t get_next_tick(void);
 
 void schedule_preemptive(void);
 bool thread_priority_cmp(const struct list_elem *first, const struct list_elem *second, void *aux);
+
+void mlfqs_priority(struct thread *t);
+void mlfqs_recent_cpu(struct thread *t);
+void mlfqs_load_avg(void);
+void mlfqs_increment(void);
+void mlfqs_recalc(void);
+
 #endif /* threads/thread.h */

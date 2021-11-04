@@ -182,9 +182,25 @@ timer_interrupt (struct intr_frame *args UNUSED)
   int64_t least_tick = get_next_tick();
   if(ticks <= least_tick)
   {
+  /* call wakeup function */
     thread_awake(ticks);
   }
-  /* call wakeup function */
+  
+  if(thread_mlfqs || thread_prior_aging)
+  {
+    mlfqs_increment();
+    if(ticks % 4 == 0)
+    {
+      thread_foreach(mlfqs_priority, NULL);
+      if(ticks % TIMER_FREQ == 0 )
+      {
+        thread_foreach(mlfqs_recent_cpu, NULL);
+        mlfqs_load_avg();
+      }
+    }
+    //SUSPECT: should be a return here?
+  }
+
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
