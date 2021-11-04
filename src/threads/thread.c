@@ -41,7 +41,7 @@ static struct list all_list;
 static struct list sleep_list;
 
 /* variable to keep track of next thread to awake in sleep_list */
-int64_t next_tick = INT64_MAX;
+static int64_t next_tick = INT64_MAX;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -113,7 +113,7 @@ thread_init (void)
   list_init (&ready_list);
   list_init (&all_list);
   list_init (&sleep_list);
-
+  next_tick = INT64_MAX;
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
