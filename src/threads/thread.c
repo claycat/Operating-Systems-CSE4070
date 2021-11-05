@@ -71,8 +71,8 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
 #ifndef USERPROG
 /* Project 3 */
-bool thread_prior_aging;
 #endif
+bool thread_prior_aging;
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -244,6 +244,7 @@ thread_create (const char *name, int priority,
 
   /* push to child list */
   list_push_back(&(thread_current()->child), &(t->child_elem));
+  t->recent_cpu = thread_current()->recent_cpu;
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -251,12 +252,13 @@ thread_create (const char *name, int priority,
   /*assign file descriptor number */
   t->next_fd = 2; 
 
-  /* if priority of created thread is bigger than priority of current thread, yield CPU*/
-  struct thread *cur = thread_current();
-  if(cur->priority < t->priority)
-  {
-    thread_yield();
-  }
+  // /* if priority of created thread is bigger than priority of current thread, yield CPU*/
+  // struct thread *cur = thread_current();
+  // if(cur->priority < t->priority)
+  // {
+  //   thread_yield();
+  // }
+  schedule_preemptive();
 
   return tid;
 }
@@ -441,7 +443,7 @@ thread_set_nice (int nice UNUSED)
   enum intr_level old_level;
   old_level = intr_disable();
   cur->nice = nice;
-  mlfqs_priority(cur);
+  //mlfqs_priority(cur, NULL);
   schedule_preemptive();
   intr_set_level(old_level);
 
@@ -468,7 +470,6 @@ thread_get_load_avg (void)
   old_level = intr_disable();
   
   int load_avg_float = mult_mixed(load_avg, 100);
-
   intr_set_level(old_level);
 
   return fp_to_int_round(load_avg_float);
@@ -719,12 +720,13 @@ thread_sleep(int64_t ticks)
     cur->wakeup_tick = ticks;
     /* push to sleep list */
     list_push_back(&sleep_list, &cur->elem);
-    /* block current thread */
-    thread_block();
     /* update next tick to awake */
     update_next_tick(ticks);
+    /* block current thread */
+    thread_block();
+    
+    intr_set_level(old_level); //maybe here?
   }
-  intr_set_level(old_level); //maybe here?
 
 }
 
@@ -791,69 +793,76 @@ thread_priority_cmp(const struct list_elem *first, const struct list_elem *secon
 }
 
 void
-mlfqs_priority(struct thread *t)
+mlfqs_priority(struct thread *t, void *aux)
 {
-  struct thread *cur = thread_current();
-  int recent_cpu = t->recent_cpu;
-  int nice = t->nice;
-  if(cur != idle_thread)
+  if(t != idle_thread)
   {
+    int recent_cpu = t->recent_cpu;
+    int nice = t->nice;
+
+    
+    int priority_float = int_to_fp(PRI_MAX);
     //priority = PRI_MAX – (recent_cpu / 4) - (nice * 2)
-    int recent_cpu_float = int_to_fp(recent_cpu);
-    // -(recent_cpu / 4)
-    recent_cpu_float = div_mixed(recent_cpu_float, -4);
+
+    // (recent_cpu / 4)
+    recent_cpu = div_fp(recent_cpu, int_to_fp(4));
+    // PRI_MAX - (nice * 2) 
+    priority_float = sub_mixed(priority_float, nice * 2);
     // PRI_MAX - (nice * 2) - (recent_cpu / 4)
-    int priority_float = add_mixed(recent_cpu_float, PRI_MAX - (nice * 2));
+    priority_float = sub_fp(priority_float, recent_cpu);
     t->priority = priority_float;
+    
+
   }
 
 }
 
 void 
-mlfqs_recent_cpu(struct thread *t)
+mlfqs_recent_cpu(struct thread *t, void *aux)
 {
-  struct thread *cur = thread_current();
-  int recent_cpu = t->recent_cpu;
-  int nice = t->nice;
-  if(cur != idle_thread)
+  if(t != idle_thread)
   {
+    
+    int recent_cpu = t->recent_cpu;
+    int nice = t->nice;
+
     //recent_cpu = (2 * load_avg) / (2 * load_avg + 1 ) * recent_cpu + nice
-    int load_avg_float = int_to_fp(load_avg);
-    int recent_cpu_float = int_to_fp(recent_cpu);
     // (2 * load_avg)
-    load_avg_float = mult_mixed(load_avg, 2);
+    int load_avg_float = mult_mixed(load_avg, 2);
     // (2 * load_avg + 1)
     int load_avg_plusone = add_mixed(load_avg_float, 1);
     // (2 * load_avg) / (2 * load_avg + 1)
     load_avg_float = div_fp(load_avg_float, load_avg_plusone);
     // (2 * load_avg) / (2 * load_avg + 1 ) * recent_cpu
-    load_avg_float = mult_fp(load_avg_float, recent_cpu_float);
-    recent_cpu_float = add_mixed(load_avg_float, nice);
-
-    t->recent_cpu = recent_cpu_float;
+    load_avg_float = mult_fp(load_avg_float, recent_cpu);
+    t->recent_cpu = add_mixed(load_avg_float, nice);
+     
   }
   
 }
 void 
 mlfqs_load_avg(void)
 {
-  //load_avg = (59/60) * load_avg + (1/60) * ready_threads
-  int load_avg_float = int_to_fp(load_avg);
-  int constant_59d60 = div_mixed(int_to_fp(59), 60); // 59/60
-  int constant_1d60 = div_mixed(int_to_fp(1), 60); // 1/60
-
   /* ready threads = ready_list size + non-idle threads */
   int ready_threads = list_size(&ready_list);
-  if(thread_current() != idle_thread) ready_threads++;
+  if(thread_current() != idle_thread) ready_threads+=1;
+
+  
+  //load_avg = (59/60) * load_avg + (1/60) * ready_threads
+  int constant_59d60 = div_fp(int_to_fp(59), int_to_fp(60)); // 59/60
+  int constant_1d60 = div_fp(int_to_fp(1), int_to_fp(60)); // 1/60
+
+
+  // (59/60) * load_avg
+  constant_59d60 = mult_fp(constant_59d60, load_avg);
 
   // (1/60) * ready_threads
   constant_1d60 = mult_mixed(constant_1d60, ready_threads);
 
-  // (59/60) * load_avg
-  constant_59d60 = mult_fp(constant_59d60, load_avg_float);
+  load_avg = add_fp(constant_1d60, constant_59d60);
+  
 
-  load_avg_float = add_fp(constant_1d60, constant_59d60);
-  load_avg = load_avg_float;
+
 
   if(load_avg < 0) load_avg = 0;
 }
@@ -866,14 +875,4 @@ mlfqs_increment(void)
   {
     cur->recent_cpu = add_mixed(cur->recent_cpu, 1);
   }
-}
-
-void 
-mlfqs_recalc(void)
-{
-  struct list_elem *iter;
-  mlfqs_load_avg();
-  //suspicious but...
-  thread_foreach(mlfqs_recent_cpu, NULL);
-  thread_foreach(mlfqs_priority, NULL);
 }

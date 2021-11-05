@@ -1,4 +1,4 @@
-#define bias (1<<14)
+#define bias ( 1 << 14 )
 #define INT_MAX 2147483647
 #define INT_MIN -2149483647
 
@@ -36,7 +36,8 @@ int_to_fp(int n)
 int
 fp_to_int_round(int x)
 {
-   return x >= 0 ? (x+bias/2)/bias : (x-bias/2)/bias;
+    if(x >= 0) return (x + bias / 2) / bias;
+    else return (x - bias /2 ) / bias;
 }
 
 /* converts integer to fixed point rounding to zero */
@@ -57,7 +58,7 @@ add_fp(int x,int y)
 int
 add_mixed(int x, int n)
 {
-    return x + bias*n;
+    return x + bias * n;
 }
 
 /* returns float x - float y */

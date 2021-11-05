@@ -9,9 +9,9 @@
 
 extern bool thread_mlfqs;
 
+extern bool thread_prior_aging;
 #ifndef USERPROG
 /* Project 3 */
-extern bool thread_prior_aging;
 #endif
 
 
@@ -179,10 +179,9 @@ int64_t get_next_tick(void);
 void schedule_preemptive(void);
 bool thread_priority_cmp(const struct list_elem *first, const struct list_elem *second, void *aux);
 
-void mlfqs_priority(struct thread *t);
-void mlfqs_recent_cpu(struct thread *t);
+void mlfqs_priority(struct thread *t, void *aux);
+void mlfqs_recent_cpu(struct thread *t, void *aux);
 void mlfqs_load_avg(void);
 void mlfqs_increment(void);
-void mlfqs_recalc(void);
 
 #endif /* threads/thread.h */
