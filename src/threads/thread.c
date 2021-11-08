@@ -252,12 +252,12 @@ thread_create (const char *name, int priority,
   /*assign file descriptor number */
   t->next_fd = 2; 
 
-  // /* if priority of created thread is bigger than priority of current thread, yield CPU*/
-  // struct thread *cur = thread_current();
-  // if(cur->priority < t->priority)
-  // {
-  //   thread_yield();
-  // }
+  /* if priority of created thread is bigger than priority of current thread, yield CPU*/
+  struct thread *cur = thread_current();
+  if(cur->priority < t->priority)
+  {
+    thread_yield();
+  }
   schedule_preemptive();
 
   return tid;
